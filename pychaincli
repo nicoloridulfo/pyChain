@@ -1,0 +1,44 @@
+#!env/bin/python
+import re
+import socket
+from urllib import response
+import fire
+from PyChain import Blockchain
+import json
+
+
+def request(host, request: str, body: str | dict = None):
+    host, port = host.split(":")
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.connect((host, int(port)))
+        data = {"request": request}
+        if body:
+            data["body"] = body
+        sock.sendall(json.dumps(data).encode())
+        return json.loads(sock.recv(1024).decode())
+
+
+def getblocks(host: str, max=5):
+    print(request(host, "get_blocks")["response"])
+
+
+def getpeers(host: str):
+    print(request(host, "get_peers")["response"])
+
+def addpeer(host: str):
+    print(request(host, "add_me", "localhost:8000"))
+
+def addblock(host: str, data: str):
+    print("Adding block to", "'", host, "'")
+    blockchain = Blockchain()
+    chain = request(host, "get_blocks")["response"]
+    chain = [Blockchain.dict_to_block(block) for block in chain]
+    blockchain.import_chain(chain)
+    assert blockchain.verify_chain()[0]
+    blockchain.add_block(data)
+    print(request(host, "recieve_block", Blockchain.block_to_dict(blockchain.blocks[-1])))
+
+
+
+if __name__ == '__main__':
+    fire.Fire()

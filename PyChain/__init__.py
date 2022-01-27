@@ -1,7 +1,9 @@
 from hashlib import sha256
+import base64
 from time import time
 import struct
 from typing import List
+import typing
 
 
 class Blockchain:
@@ -51,34 +53,31 @@ class Blockchain:
             prev_hash = sha256(self.blocks[i-1][self.HEADER_SLICE]).digest()
             curr_hash = self.blocks[i][self.PREV_HASH_SLICE]
             if prev_hash != curr_hash:
-                return False
+                return False, f"Header hash mismatch at block {i}"
 
             # Check that the payload hashes are correct
             body_hash = self.blocks[i][self.BODY_HASH_SLICE]
             calc_body_hash = sha256(self.blocks[i][self.BODY_SLICE]).digest()
             if body_hash != calc_body_hash:
-                return False
+                return False, f"Body hash mismatch at block {i}"
 
             # Check that the index is correct
             block_index = struct.unpack("=I", self.blocks[i][self.BLOCK_NR_SLICE])[0]
             if block_index != i:
-                return False
+                return False, f"Block index mismatch at block {i}"
 
             # Check that all the times are in order
             prev_time = struct.unpack("=Q", self.blocks[i-1][self.BLOCK_CREATION_TIME_SLICE])[0]
             curr_time = struct.unpack("=Q", self.blocks[i][self.BLOCK_CREATION_TIME_SLICE])[0]
             if curr_time < prev_time:
-                return False
+                return False, f"Block time mismatch at block {i}"
 
-        return True
+        return True, "Chain is valid"
 
-    def import_chain(self, chain: List[bytes] | bytes):
-        if isinstance(chain, list):
-            self.blocks = chain
-        elif isinstance(chain, bytes):
-            self.blocks = [chain]
-        else:
-            raise Exception("Invalid import data")
+    def import_chain(self, chain: List[bytes]):
+        if not isinstance(chain, list) or not all(isinstance(b, bytes) for b in chain):
+            raise TypeError("Chain must be a list of bytes")
+        self.blocks = chain
 
     def export_chain(self):
         return self.blocks
@@ -111,6 +110,27 @@ class Blockchain:
         block_len, n, prev_hash, body_hash, time, body = struct.unpack(
             f"=2I32s32sQ{len(block)-80}s", block)
         return block_len, n, prev_hash, body_hash, time, body.decode()
+
+    @staticmethod
+    def block_to_dict(block: bytes)->dict:
+        block_len, n, prev_hash, body_hash, time, body = Blockchain.decode_block(
+            block)
+        return {
+            "block_len": block_len,
+            "n": n,
+            "prev_hash": base64.b64encode(prev_hash).decode(),
+            "body_hash": base64.b64encode(body_hash).decode(),
+            "time": time,
+            "body": body
+        }
+
+    @staticmethod
+    def dict_to_block(block_dict: dict)->bytes:
+        n = block_dict["n"]
+        prev_hash = base64.b64decode(block_dict["prev_hash"])
+        time = block_dict["time"]
+        body = block_dict["body"]
+        return Blockchain.encode_block(n, prev_hash, time, body)
 
 if __name__ == "__main__":
     bc = Blockchain()
