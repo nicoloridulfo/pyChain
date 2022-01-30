@@ -3,7 +3,6 @@ import base64
 from time import time
 import struct
 from typing import List
-import typing
 
 
 class Blockchain:
@@ -28,7 +27,7 @@ class Blockchain:
     ( "=" is used to not use padding )
     """
     blocks = []
-    
+
     HEADER_SLICE = slice(4, 80)
     BLOCK_NR_SLICE = slice(4, 8)
     PREV_HASH_SLICE = slice(8, 40)
@@ -36,18 +35,17 @@ class Blockchain:
     BLOCK_CREATION_TIME_SLICE = slice(72, 80)
     BODY_SLICE = slice(80, None)
 
-
     def add_block(self, body: str):
         prev_header = self.blocks[-1][self.HEADER_SLICE]
         prev_hash = sha256(prev_header).digest()
         block = self.encode_block(
-            len(self.blocks), prev_hash, int(time()), body)
+            struct.unpack("=I", self.blocks[-1][self.BLOCK_NR_SLICE])[0]+1, prev_hash, int(time()), body)
         self.blocks.append(block)
 
     def verify_chain(self):
         if len(self.blocks) == 0:
             return True
-
+        
         for i in range(1, len(self.blocks)):
             # Check that all the hashes are correct
             prev_hash = sha256(self.blocks[i-1][self.HEADER_SLICE]).digest()
@@ -62,13 +60,16 @@ class Blockchain:
                 return False, f"Body hash mismatch at block {i}"
 
             # Check that the index is correct
-            block_index = struct.unpack("=I", self.blocks[i][self.BLOCK_NR_SLICE])[0]
+            block_index = struct.unpack(
+                "=I", self.blocks[i][self.BLOCK_NR_SLICE])[0]
             if block_index != i:
                 return False, f"Block index mismatch at block {i}"
 
             # Check that all the times are in order
-            prev_time = struct.unpack("=Q", self.blocks[i-1][self.BLOCK_CREATION_TIME_SLICE])[0]
-            curr_time = struct.unpack("=Q", self.blocks[i][self.BLOCK_CREATION_TIME_SLICE])[0]
+            prev_time = struct.unpack(
+                "=Q", self.blocks[i-1][self.BLOCK_CREATION_TIME_SLICE])[0]
+            curr_time = struct.unpack(
+                "=Q", self.blocks[i][self.BLOCK_CREATION_TIME_SLICE])[0]
             if curr_time < prev_time:
                 return False, f"Block time mismatch at block {i}"
 
@@ -112,7 +113,7 @@ class Blockchain:
         return block_len, n, prev_hash, body_hash, time, body.decode()
 
     @staticmethod
-    def block_to_dict(block: bytes)->dict:
+    def block_to_dict(block: bytes) -> dict:
         block_len, n, prev_hash, body_hash, time, body = Blockchain.decode_block(
             block)
         return {
@@ -125,12 +126,13 @@ class Blockchain:
         }
 
     @staticmethod
-    def dict_to_block(block_dict: dict)->bytes:
+    def dict_to_block(block_dict: dict) -> bytes:
         n = block_dict["n"]
         prev_hash = base64.b64decode(block_dict["prev_hash"])
         time = block_dict["time"]
         body = block_dict["body"]
         return Blockchain.encode_block(n, prev_hash, time, body)
+
 
 if __name__ == "__main__":
     bc = Blockchain()
@@ -143,4 +145,5 @@ if __name__ == "__main__":
     print(f"Time to add {N} blocks:", round((t1-t0)*10**3), "ms")
     print(f"Time to add 1 block:", round(((t1-t0)/N)*10**6, 3), "us")
     print("Verify chain: ", bc.verify_chain())
-    print(f"Size of a blockchain of {N} blocks:", sum([len(block) for block in bc.blocks])//1024, "kB")
+    print(f"Size of a blockchain of {N} blocks:", sum(
+        [len(block) for block in bc.blocks])//1024, "kB")
